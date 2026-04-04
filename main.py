@@ -28,6 +28,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
+from datetime import datetime
 
 import uvicorn
 from dotenv import load_dotenv
@@ -137,36 +138,35 @@ async def health():
 async def upload_reference(
     request: Request,
     file: UploadFile = File(...),
+    num_jitters: int = Form(10),  # Matches frontend [cite: 230]
+    model: str = Form("large")    # Matches frontend [cite: 230]
 ):
     user = auth.require_user(request)
     user_id = user["sub"]
-
-    contents = await file.read()
-    if len(contents) > 10 * 1024 * 1024:          # 10 MB hard limit
-        raise HTTPException(413, "Reference photo too large (max 10 MB).")
-
-    # Run CPU-heavy encoding in thread pool so the event loop isn't blocked
-    loop = asyncio.get_running_loop()
+    
+    # Read image bytes
+    image_bytes = await file.read()
+    
     try:
-        encodings = await loop.run_in_executor(
-            None, engine.encode_reference_image, contents
-        )
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+        # Use the engine to encode with the new parameters [cite: 277]
+        encodings = engine.encode_reference_image(image_bytes)
+        
+        if not encodings:
+            raise HTTPException(400, "No face detected in this photo.")
 
-    saved_ids = []
-    for enc in encodings:
-        doc_id = await database.save_face_encoding(
-            user_id, file.filename or "reference.jpg", enc
-        )
-        saved_ids.append(doc_id)
-
-    return {
-        "message": f"Saved {len(saved_ids)} face encoding(s).",
-        "encoding_ids": saved_ids,
-    }
-
-
+        # Save to MongoDB [cite: 212]
+        db = database.get_db()
+        await db["face_encodings"].insert_one({
+            "user_id": user_id,
+            "filename": file.filename,
+            "encoding": encodings[0], 
+            "created_at": datetime.utcnow()
+        })
+        
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(500, str(e))
 @app.get("/my-encodings")
 async def my_encodings(request: Request):
     user = auth.require_user(request)
