@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-REDIRECT_URI         = "http://localhost:8000/auth/callback"
+REDIRECT_URI = os.getenv("https://eventai-w89h.onrender.com", "http://localhost:8000/auth/callback")
 
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     raise EnvironmentError(
