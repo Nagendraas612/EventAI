@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-REDIRECT_URI = os.getenv("https://eventai-w89h.onrender.com", "http://localhost:8000/auth/callback")
+
 
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     raise EnvironmentError(
@@ -70,7 +70,18 @@ def require_user(request: Request) -> dict:
 @router.get("/login")
 async def login(request: Request):
     """Redirect the browser to Google's consent screen."""
-    return await oauth.google.authorize_redirect(request, REDIRECT_URI)
+    
+    # 1. Dynamically get the current website URL (e.g., localhost or Render)
+    root_url = str(request.base_url).rstrip("/")
+    dynamic_redirect_uri = f"{root_url}/auth/callback"
+    
+    # 2. Cloud Proxy Fix: Force HTTPS if we are on the live internet
+    if "localhost" not in dynamic_redirect_uri and "127.0.0.1" not in dynamic_redirect_uri:
+        dynamic_redirect_uri = dynamic_redirect_uri.replace("http://", "https://")
+        
+    logger.info(f"Telling Google to redirect to: {dynamic_redirect_uri}")
+    
+    return await oauth.google.authorize_redirect(request, dynamic_redirect_uri)
 
 
 @router.get("/callback")
