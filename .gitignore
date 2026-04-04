@@ -1,0 +1,16 @@
+# Secrets (CRITICAL)
+.env
+.env.*
+
+# Python Virtual Environments
+venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac OS junk files
+.DS_Store

@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventAI | Deep Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <!-- face-api.js for CLIENT-SIDE face validation before upload -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+    <style>
+    /* ═══════════════════════════════════════
+       ROOT & RESET
+    ═══════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg:        #070b12;
+        --bg2:       #0c1220;
+        --surface:   rgba(255,255,255,0.04);
+        --border:    rgba(255,255,255,0.08);
+        --border-hi: rgba(99,179,237,0.3);
+        --accent:    #38bdf8;
+        --purple:    #a78bfa;
+        --green:     #4ade80;
+        --amber:     #fbbf24;
+        --red:       #f87171;
+        --pink:      #f472b6;
+        --text:      #e2e8f0;
+        --muted:     #475569;
+        --mono:      'IBM Plex Mono', monospace;
+        --sans:      'Outfit', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════
+       BACKGROUND
+    ═══════════════════════════════════════ */
+    .bg-fx {
+        position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .bg-fx::before {
+        content: '';
+        position: absolute;
+        width: 900px; height: 900px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(56,189,248,0.07) 0%, transparent 70%);
+        top: -300px; left: -300px;
+        animation: drift 20s ease-in-out infinite alternate;
+    }
+    .bg-fx::after {
+        content: '';
+        position: absolute;
+        width: 700px; height: 700px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
+        bottom: -200px; right: -200px;
+        animation: drift 25s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes drift { from { transform: translate(0,0); } to { transform: translate(60px, 40px); } }
+
+    .scan-line {
+        position: fixed; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(56,189,248,0.15), transparent);
+        pointer-events: none; z-index: 1;
+        animation: scanMove 8s linear infinite;
+        opacity: 0;
+    }
+    .scan-line.active { opacity: 1; }
+    @keyframes scanMove { from { top: -1px; } to { top: 100vh; } }
+
+    /* ═══════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════ */
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.5rem; position: relative; z-index: 10; }
+
+    /* ═══════════════════════════════════════
+       CARDS
+    ═══════════════════════════════════════ */
+    .card {
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: 1.25rem;
+        transition: border-color 0.3s;
+        position: relative;
+        overflow: hidden;
+    }
+    .card::before {
+        content: '';
+        position: absolute; inset: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 60%);
+        pointer-events: none;
+    }
+    .card:hover { border-color: rgba(255,255,255,0.12); }
+
+    /* ═══════════════════════════════════════
+       TYPOGRAPHY
+    ═══════════════════════════════════════ */
+    .mono { font-family: var(--mono); }
+    .logo {
+        font-family: var(--sans);
+        font-weight: 900;
+        font-size: 1.5rem;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #fff 30%, var(--accent));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .pill {
+        font-family: var(--mono);
+        font-size: 0.6rem; font-weight: 500;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        padding: 0.2rem 0.65rem; border-radius: 99px;
+        border: 1px solid;
+    }
+    .pill-blue  { color: var(--accent);  border-color: rgba(56,189,248,0.3);  background: rgba(56,189,248,0.07); }
+    .pill-green { color: var(--green);   border-color: rgba(74,222,128,0.3);   background: rgba(74,222,128,0.07); }
+    .pill-amber { color: var(--amber);   border-color: rgba(251,191,36,0.3);   background: rgba(251,191,36,0.07); }
+    .pill-red   { color: var(--red);     border-color: rgba(248,113,113,0.3);  background: rgba(248,113,113,0.07); }
+
+    .label {
+        font-family: var(--mono); font-size: 0.6rem;
+        letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    }
+
+    /* ═══════════════════════════════════════
+       INPUTS
+    ═══════════════════════════════════════ */
+    .inp {
+        width: 100%;
+        background: rgba(0,0,0,0.35);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.8rem 1rem;
+        font-size: 0.82rem;
+        font-family: var(--mono);
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .inp::placeholder { color: var(--muted); }
+    .inp:focus { border-color: var(--border-hi); box-shadow: 0 0 0 3px rgba(56,189,248,0.06); }
+
+    /* ═══════════════════════════════════════
+       DROPZONE
+    ═══════════════════════════════════════ */
+    .dropzone {
+        border: 1.5px dashed rgba(56,189,248,0.25);
+        border-radius: 1rem; padding: 1.75rem;
+        text-align: center; cursor: pointer;
+        transition: all 0.2s;
+        background: rgba(56,189,248,0.025);
+        position: relative;
+    }
+    .dropzone:hover, .dropzone.over {
+        border-color: rgba(56,189,248,0.5);
+        background: rgba(56,189,248,0.06);
+    }
+
+    /* ═══════════════════════════════════════
+       REFERENCE PREVIEWS
+    ═══════════════════════════════════════ */
+    .ref-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+        gap: 0.5rem; margin-top: 1rem;
+    }
+    .ref-thumb {
+        position: relative; aspect-ratio: 1;
+        border-radius: 0.6rem; overflow: hidden;
+        border: 2px solid transparent; transition: border-color 0.25s;
+        background: rgba(0,0,0,0.3);
+        cursor: default;
+    }
+    .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ref-thumb .badge {
+        position: absolute; bottom: 3px; right: 3px;
+        font-family: var(--mono); font-size: 9px; font-weight: 700;
+        padding: 1px 5px; border-radius: 4px; line-height: 1.4;
+    }
+    .badge-ok   { background: rgba(74,222,128,0.9);  color: #052e16; }
+    .badge-warn { background: rgba(251,191,36,0.9);  color: #451a03; }
+    .badge-bad  { background: rgba(248,113,113,0.9); color: #fff; }
+    .badge-chk  { background: rgba(100,116,139,0.85); color: #fff; }
+    .ref-thumb .rm {
+        position: absolute; top: 3px; left: 3px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: rgba(0,0,0,0.75); border: none; cursor: pointer;
+        color: #ccc; font-size: 10px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.15s;
+    }
+    .ref-thumb:hover .rm { opacity: 1; }
+    .ref-thumb.ok   { border-color: rgba(74,222,128,0.4); }
+    .ref-thumb.warn { border-color: rgba(251,191,36,0.4); }
+    .ref-thumb.bad  { border-color: rgba(248,113,113,0.4); }
+
+    /* ═══════════════════════════════════════
+       QUALITY METER
+    ═══════════════════════════════════════ */
+    .q-bar-wrap { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; margin-top: 0.4rem; }
+    .q-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.5s; }
+
+    /* ═══════════════════════════════════════
+       SPEED / ACCURACY TOGGLE
+    ═══════════════════════════════════════ */
+    .mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .mode-btn {
+        padding: 0.65rem; border-radius: 0.65rem; cursor: pointer;
+        border: 1px solid var(--border); background: transparent;
+        font-family: var(--mono); font-size: 0.68rem; font-weight: 700;
+        letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--muted); transition: all 0.2s; text-align: center;
+    }
+    .mode-btn.active-speed  { border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.07); color: var(--amber); }
+    .mode-btn.active-acc    { border-color: rgba(74,222,128,0.5);  background: rgba(74,222,128,0.07);  color: var(--green); }
+
+    /* ═══════════════════════════════════════
+       TOLERANCE SLIDER
+    ═══════════════════════════════════════ */
+    .tol-wrap { position: relative; }
+    .tol-gradient {
+        height: 6px; border-radius: 3px; position: relative;
+        background: linear-gradient(90deg, #ef4444 0%, #fbbf24 30%, #4ade80 50%, #fbbf24 70%, #ef4444 100%);
+    }
+    .tol-thumb-el {
+        position: absolute; top: 50%; transform: translate(-50%, -50%);
+        width: 16px; height: 16px; border-radius: 50%;
+        background: #fff; border: 2px solid var(--accent);
+        box-shadow: 0 0 10px rgba(56,189,248,0.5);
+        pointer-events: none; transition: left 0.08s;
+    }
+    input[type=range].tol-range {
+        -webkit-appearance: none;
+        position: absolute; inset: -5px 0; height: calc(100% + 10px);
+        background: transparent; cursor: pointer; z-index: 2; opacity: 0;
+    }
+    input[type=range].tol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; }
+
+    /* ═══════════════════════════════════════
+       BUTTONS
+    ═══════════════════════════════════════ */
+    .btn {
+        width: 100%; padding: 0.85rem; border-radius: 0.85rem; border: none;
+        font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+        transition: all 0.2s; position: relative; overflow: hidden;
+    }
+    .btn::after {
+        content: '';
+        position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%);
+        pointer-events: none;
+    }
+    .btn-upload { background: linear-gradient(135deg, #1e3a5f, #1e40af); color: #93c5fd; }
+    .btn-upload:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(56,189,248,0.2); }
+    .btn-upload:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-scan { background: linear-gradient(135deg, #581c87, #9f1239); color: #f0abfc; }
+    .btn-scan:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(244,114,182,0.25); }
+    .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ═══════════════════════════════════════
+       PROGRESS
+    ═══════════════════════════════════════ */
+    .prog-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.05); overflow: hidden; }
+    .prog-fill {
+        height: 100%; width: 0%; border-radius: 3px;
+        background: linear-gradient(90deg, var(--accent), var(--pink));
+        transition: width 0.35s;
+        position: relative;
+    }
+    .prog-fill::after {
+        content: '';
+        position: absolute; right: 0; top: 0; bottom: 0; width: 50px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
+    }
+
+    /* ═══════════════════════════════════════
+       STAT BOXES
+    ═══════════════════════════════════════ */
+    .stat-box {
+        background: rgba(0,0,0,0.25); border: 1px solid var(--border);
+        border-radius: 0.75rem; padding: 0.75rem 0.5rem; text-align: center;
+    }
+    .stat-num { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; line-height: 1; }
+    .stat-lbl { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.1em; color: var(--muted); margin-top: 0.35rem; text-transform: uppercase; }
+
+    /* ═══════════════════════════════════════
+       MATCH PREVIEW STRIP
+    ═══════════════════════════════════════ */
+    .match-strip { display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.25rem; }
+    .match-strip::-webkit-scrollbar { height: 2px; }
+    .match-strip::-webkit-scrollbar-thumb { background: rgba(74,222,128,0.3); border-radius: 2px; }
+    .match-thumb {
+        width: 48px; height: 48px; border-radius: 0.5rem;
+        object-fit: cover; border: 2px solid rgba(74,222,128,0.4);
+        flex-shrink: 0;
+        animation: popIn 0.25s ease-out;
+    }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+
+    /* ═══════════════════════════════════════
+       MISC
+    ═══════════════════════════════════════ */
+    .divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.85rem 0; }
+    .divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+    .divider span { font-family: var(--mono); font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+    .pulse { animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(0.75); } }
+
+    .tip-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .tip-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+    .hidden { display: none !important; }
+    .fade-in { animation: fadeUp 0.35s ease-out; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    /* ═══════════════════════════════════════
+       LOGIN
+    ═══════════════════════════════════════ */
+    .login-wrap { max-width: 400px; margin: 5rem auto; padding: 2.5rem; text-align: center; }
+    .login-icon {
+        width: 68px; height: 68px; border-radius: 1.25rem;
+        background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.2);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.8rem; margin: 0 auto 1.5rem;
+    }
+    .btn-google {
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.75rem;
+        background: linear-gradient(135deg, #1e40af, #5b21b6);
+        color: white; padding: 0.85rem 2rem; border-radius: 0.85rem;
+        font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+        letter-spacing: 0.07em; text-decoration: none;
+        transition: all 0.2s; width: 100%;
+        box-shadow: 0 0 30px rgba(79,70,229,0.25);
+    }
+    .btn-google:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(79,70,229,0.4); }
+
+    /* ═══════════════════════════════════════
+       PROFILE DROPDOWN
+    ═══════════════════════════════════════ */
+    .profile-pill {
+        display: flex; align-items: center; gap: 0.6rem;
+        background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+        padding: 0.35rem 0.9rem 0.35rem 0.4rem; border-radius: 99px;
+        cursor: pointer; transition: background 0.2s;
+    }
+    .profile-pill:hover { background: rgba(255,255,255,0.07); }
+    .av { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid rgba(56,189,248,0.3); object-fit: cover; }
+    .profile-drop {
+        position: absolute; right: 0; top: calc(100% + 0.6rem);
+        width: 300px; padding: 1.25rem; z-index: 50;
+    }
+    .ref-chip {
+        display: flex; align-items: center; gap: 0.5rem;
+        background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+        border-radius: 0.5rem; padding: 0.45rem 0.75rem; margin-bottom: 0.35rem;
+        transition: border-color 0.15s;
+    }
+    .ref-chip:hover { border-color: rgba(248,113,113,0.3); }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.2); border-radius: 10px; }
+    </style>
+</head>
+
+<body>
+<div class="bg-fx"></div>
+<div class="scan-line" id="scan-line"></div>
+
+<div class="wrap">
+
+    <!-- ──────── HEADER ──────── -->
+    <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2.5rem;">
+        <div style="display:flex;align-items:center;gap:0.65rem;">
+            <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0369a1,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">⚡</div>
+            <span class="logo">EventAI</span>
+            <span class="pill pill-blue" id="model-pill">HOG · Fast</span>
+        </div>
+
+        <div style="position:relative;">
+            <div id="user-profile" onclick="toggleProfile(event)" class="profile-pill hidden">
+                <img id="user-avatar" src="" alt="" class="av">
+                <span id="user-name" style="font-size:0.82rem;font-weight:600;"></span>
+                <svg width="9" height="5" viewBox="0 0 9 5" fill="none" style="color:var(--muted);">
+                    <path d="M1 1l3.5 3L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </div>
+
+            <div id="profile-manager" class="card profile-drop hidden fade-in">
+                <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:1rem;">
+                    <img id="user-avatar-2" src="" alt="" class="av" style="width:36px;height:36px;">
+                    <div>
+                        <p id="user-name-2" style="font-size:0.85rem;font-weight:700;"></p>
+                        <p id="user-email" class="mono" style="font-size:0.62rem;color:var(--muted);"></p>
+                    </div>
+                </div>
+                <hr style="border:none;border-top:1px solid var(--border);margin-bottom:0.85rem;">
+                <p class="label" style="margin-bottom:0.6rem;">Face DNA Saved</p>
+                <div id="reference-list" style="max-height:160px;overflow-y:auto;margin-bottom:0.85rem;">
+                    <p style="font-size:0.72rem;color:var(--muted);font-style:italic;">None saved.</p>
+                </div>
+                <hr style="border:none;border-top:1px solid var(--border);margin-bottom:0.85rem;">
+                <a href="/auth/logout" style="display:block;text-align:center;padding:0.6rem;background:rgba(248,113,113,0.07);color:var(--red);border:1px solid rgba(248,113,113,0.2);border-radius:0.6rem;font-family:var(--mono);font-size:0.68rem;font-weight:700;text-decoration:none;letter-spacing:0.07em;transition:all 0.2s;">
+                    SIGN OUT
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- ──────── LOGIN VIEW ──────── -->
+    <div id="login-view" class="card login-wrap fade-in">
+        <div class="login-icon">🔎</div>
+        <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.6rem;">Welcome to EventAI</h2>
+        <p style="font-size:0.82rem;color:var(--muted);line-height:1.7;margin-bottom:2rem;">
+            AI-powered face detection across your entire event album.<br>
+            Upload once, find yourself everywhere.
+        </p>
+        <a href="/auth/login" class="btn-google">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Continue with Google
+        </a>
+        <p style="font-size:0.65rem;color:var(--muted);margin-top:1rem;font-family:var(--mono);">SECURE · PRIVATE · YOUR DATA STAYS YOURS</p>
+    </div>
+
+    <!-- ──────── DASHBOARD ──────── -->
+    <div id="dashboard-view" class="hidden fade-in">
+
+        <!-- Tip Banner -->
+        <div id="tip-banner" style="display:flex;align-items:flex-start;gap:0.75rem;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:0.9rem;padding:0.85rem 1.1rem;margin-bottom:1.5rem;">
+            <span style="font-size:1rem;margin-top:1px;">💡</span>
+            <div>
+                <p style="font-size:0.78rem;color:#fcd34d;font-weight:600;margin-bottom:0.2rem;">Maximize your match rate</p>
+                <p style="font-size:0.72rem;color:#a16207;line-height:1.6;">
+                    Upload <strong style="color:#fbbf24;">3–5 clear selfies</strong> from different angles (front, left, right). 
+                    Use <strong style="color:#fbbf24;">Accurate mode</strong> for best results. 
+                    Set tolerance <strong style="color:#fbbf24;">0.50–0.55</strong> for real event photos.
+                </p>
+            </div>
+            <button onclick="this.closest('#tip-banner').remove()" style="background:none;border:none;color:#92400e;cursor:pointer;font-size:1rem;margin-left:auto;flex-shrink:0;">✕</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+
+            <!-- ═══════ CARD 1: FACE DNA ═══════ -->
+            <div class="card" style="padding:1.6rem;">
+
+                <!-- Header -->
+                <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:0.35rem;">
+                    <div style="width:28px;height:28px;border-radius:7px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.7rem;font-weight:700;color:var(--accent);">01</div>
+                    <h2 style="font-size:1rem;font-weight:800;letter-spacing:-0.01em;">Face DNA</h2>
+                    <span id="dna-badge" class="pill pill-green hidden">0 saved</span>
+                </div>
+                <p style="font-size:0.75rem;color:var(--muted);margin-bottom:1.1rem;line-height:1.6;">Your facial fingerprint. More angles = higher recall.</p>
+
+                <!-- Tips -->
+                <div style="background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:0.75rem;padding:0.75rem 0.9rem;margin-bottom:1.1rem;">
+                    <div class="tip-row"><div class="tip-dot" style="background:var(--green);"></div><span style="font-size:0.71rem;color:var(--muted);">Face clearly visible, good lighting</span></div>
+                    <div class="tip-row"><div class="tip-dot" style="background:var(--green);"></div><span style="font-size:0.71rem;color:var(--muted);">3–5 angles (front, left, right)</span></div>
+                    <div class="tip-row"><div class="tip-dot" style="background:var(--amber);"></div><span style="font-size:0.71rem;color:var(--muted);">No sunglasses or heavy filters</span></div>
+                    <div class="tip-row" style="margin-bottom:0;"><div class="tip-dot" style="background:var(--amber);"></div><span style="font-size:0.71rem;color:var(--muted);">Avoid group shots as reference</span></div>
+                </div>
+
+                <!-- Dropzone -->
+                <div id="dropzone" class="dropzone">
+                    <div style="font-size:2rem;margin-bottom:0.4rem;">📸</div>
+                    <p id="file-label" style="font-size:0.8rem;color:var(--accent);font-weight:600;margin-bottom:0.2rem;">Click or drag selfies here</p>
+                    <p style="font-size:0.65rem;color:var(--muted);">JPG, PNG, HEIC · Multiple files OK</p>
+                </div>
+                <input type="file" id="ref-input" accept="image/*" multiple class="hidden">
+
+                <!-- Face validation status (shown after client-side check) -->
+                <div id="face-status" class="hidden" style="margin-top:0.75rem;padding:0.6rem 0.8rem;border-radius:0.6rem;font-family:var(--mono);font-size:0.68rem;"></div>
+
+                <!-- Preview -->
+                <div id="preview-grid" class="ref-grid hidden"></div>
+
+                <!-- Quality -->
+                <div id="quality-wrap" class="hidden" style="margin-top:0.85rem;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.3rem;">
+                        <span class="label">Reference Quality</span>
+                        <span id="q-label" class="mono" style="font-size:0.65rem;font-weight:700;color:var(--green);">—</span>
+                    </div>
+                    <div class="q-bar-wrap"><div id="q-bar" class="q-bar-fill" style="width:0%;background:var(--green);"></div></div>
+                </div>
+
+                <button id="btn-upload" class="btn btn-upload" style="margin-top:0.85rem;" disabled>
+                    Extract &amp; Save Face DNA
+                </button>
+            </div>
+
+            <!-- ═══════ CARD 2: DEEP SCAN ═══════ -->
+            <div class="card" style="padding:1.6rem;">
+
+                <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:0.35rem;">
+                    <div style="width:28px;height:28px;border-radius:7px;background:rgba(244,114,182,0.1);border:1px solid rgba(244,114,182,0.25);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.7rem;font-weight:700;color:var(--pink);">02</div>
+                    <h2 style="font-size:1rem;font-weight:800;letter-spacing:-0.01em;">Deep Scan</h2>
+                </div>
+                <p style="font-size:0.75rem;color:var(--muted);margin-bottom:1.1rem;line-height:1.6;">Provide your event album. AI scans every face and returns only your photos.</p>
+
+                <!-- Speed / Accuracy Toggle -->
+                <p class="label" style="margin-bottom:0.5rem;">Scan Mode</p>
+                <div class="mode-toggle" style="margin-bottom:1rem;">
+                    <button id="mode-speed" class="mode-btn active-speed" onclick="setMode('speed')">
+                        ⚡ Fast<br>
+                        <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:0.6rem;opacity:0.7;">HOG · ~0.1s/photo</span>
+                    </button>
+                    <button id="mode-acc" class="mode-btn" onclick="setMode('accurate')">
+                        🎯 Accurate<br>
+                        <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:0.6rem;opacity:0.7;">CNN · ~1s/photo</span>
+                    </button>
+                </div>
+
+                <!-- Drive URL -->
+                <p class="label" style="margin-bottom:0.45rem;">Option 1 — Google Drive Folder</p>
+                <input type="text" id="drive-url" class="inp" placeholder="https://drive.google.com/drive/folders/..." style="margin-bottom:0.85rem;">
+
+                <div class="divider"><hr><span>or</span><hr></div>
+
+                <!-- Local Upload -->
+                <p class="label" style="margin-bottom:0.45rem;">Option 2 — Upload from Device</p>
+                <div id="local-trigger"
+                     onclick="document.getElementById('local-folder-input').click()"
+                     style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:0.75rem;padding:0.75rem 1rem;cursor:pointer;transition:border-color 0.2s;margin-bottom:1rem;">
+                    <span id="local-folder-label" class="mono" style="font-size:0.75rem;color:var(--muted);">Select event photos...</span>
+                    <span style="font-size:1rem;">📁</span>
+                </div>
+                <input type="file" id="local-folder-input" accept="image/*" multiple class="hidden">
+
+                <!-- Tolerance -->
+                <div style="background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:0.85rem;padding:0.85rem 1rem;margin-bottom:1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                        <p class="label">Match Tolerance</p>
+                        <span id="tol-val" class="mono" style="font-size:0.68rem;font-weight:700;color:var(--accent);">0.50 — Balanced</span>
+                    </div>
+                    <div class="tol-wrap">
+                        <div class="tol-gradient">
+                            <div id="tol-thumb" class="tol-thumb-el" style="left:50%;"></div>
+                        </div>
+                        <input type="range" id="tol-slider" class="tol-range" min="0.35" max="0.65" step="0.01" value="0.50">
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:0.35rem;">
+                        <span class="label" style="font-size:0.55rem;">STRICT</span>
+                        <span class="label" style="font-size:0.55rem;">LOOSE</span>
+                    </div>
+                    <p id="tol-hint" style="font-size:0.68rem;color:var(--muted);margin-top:0.5rem;line-height:1.5;font-style:italic;">Good default for most event photos.</p>
+                </div>
+
+                <!-- Live Stats (shown during scan) -->
+                <div id="scan-stats" class="hidden" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:1rem;">
+                    <div class="stat-box">
+                        <div class="stat-num" id="st-scanned" style="color:var(--accent);">0</div>
+                        <div class="stat-lbl">scanned</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="st-matched" style="color:var(--green);">0</div>
+                        <div class="stat-lbl">matched</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="st-rate" style="color:var(--muted);">0%</div>
+                        <div class="stat-lbl">hit rate</div>
+                    </div>
+                </div>
+
+                <!-- Match preview strip -->
+                <div id="match-preview-wrap" class="hidden" style="margin-bottom:1rem;">
+                    <p class="label" style="margin-bottom:0.4rem;">Live Matches</p>
+                    <div class="match-strip" id="match-strip"></div>
+                </div>
+
+                <button id="btn-search" class="btn btn-scan">Start Deep Search</button>
+
+                <!-- Progress -->
+                <div id="progress-area" class="hidden" style="margin-top:1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.45rem;">
+                        <div style="display:flex;align-items:center;gap:0.45rem;">
+                            <div style="width:7px;height:7px;border-radius:50%;background:var(--green);" class="pulse"></div>
+                            <span class="label" style="font-size:0.58rem;">Scanning...</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:0.75rem;">
+                            <span class="mono" style="font-size:0.65rem;color:var(--green);">✓ <span id="live-ct">0</span> found</span>
+                            <span id="prog-count" class="mono" style="font-size:0.65rem;color:var(--accent);">0/0</span>
+                        </div>
+                    </div>
+                    <div class="prog-track"><div id="progress-bar" class="prog-fill"></div></div>
+                    <div style="display:flex;justify-content:space-between;margin-top:0.4rem;">
+                        <p id="status-text" class="mono" style="font-size:0.6rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;max-width:70%;"></p>
+                        <p id="eta-text" class="mono" style="font-size:0.62rem;font-weight:700;color:var(--pink);">ETA: —</p>
+                    </div>
+                </div>
+
+            </div><!-- /card 2 -->
+        </div><!-- /grid -->
+    </div><!-- /dashboard-view -->
+
+</div><!-- /wrap -->
+
+<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let selectedFiles   = [];
+let scanMode        = 'speed';   // 'speed' | 'accurate'
+let faceApiReady    = false;
+let scanStartTime   = 0;
+
+// ══════════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════════
+function toast(msg, type = 'success') {
+    const bg = {
+        success: 'linear-gradient(135deg,#0369a1,#4f46e5)',
+        error:   'linear-gradient(135deg,#b91c1c,#7f1d1d)',
+        info:    'linear-gradient(135deg,#0c4a6e,#1e40af)',
+        warn:    'linear-gradient(135deg,#92400e,#78350f)'
+    };
+    Toastify({
+        text: msg, duration: 3800,
+        gravity: 'top', position: 'right',
+        style: { background: bg[type]||bg.success, borderRadius: '10px',
+                 fontSize: '0.78rem', fontFamily: "'IBM Plex Mono', monospace",
+                 lineHeight: '1.5' }
+    }).showToast();
+}
+
+// ══════════════════════════════════════════════════════════
+//  FACE-API.JS LOADER (optional — gracefully degrades)
+// ══════════════════════════════════════════════════════════
+async function loadFaceApi() {
+    try {
+        if (typeof faceapi === 'undefined') return;
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        faceApiReady = true;
+    } catch(e) { console.warn('face-api models unavailable, skipping client validation', e); }
+}
+window.addEventListener('load', loadFaceApi);
+
+// ══════════════════════════════════════════════════════════
+//  FACE VALIDATION (client-side)
+// ══════════════════════════════════════════════════════════
+async function validateFaces(files) {
+    if (!faceApiReady || typeof faceapi === 'undefined') return null;  // skip if unavailable
+    const results = [];
+    for (const file of files) {
+        try {
+            const img = await createImageBitmap(file);
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+            const detections = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }));
+            results.push({ file, count: detections.length, score: detections[0]?.score ?? 0 });
+        } catch { results.push({ file, count: -1, score: 0 }); }
+    }
+    return results;
+}
+
+// ══════════════════════════════════════════════════════════
+//  PREVIEW + QUALITY RENDER
+// ══════════════════════════════════════════════════════════
+async function renderPreviews(files) {
+    const grid    = document.getElementById('preview-grid');
+    const qWrap   = document.getElementById('quality-wrap');
+    const qBar    = document.getElementById('q-bar');
+    const qLabel  = document.getElementById('q-label');
+    const faceStatus = document.getElementById('face-status');
+
+    grid.innerHTML = '';
+    grid.classList.remove('hidden');
+    qWrap.classList.remove('hidden');
+    faceStatus.classList.add('hidden');
+
+    // Temporary loading badges while we validate
+    files.forEach((file, i) => {
+        const div = document.createElement('div');
+        div.className = 'ref-thumb'; div.id = `rt-${i}`;
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        const bdg = document.createElement('div');
+        bdg.className = 'badge badge-chk'; bdg.textContent = '…';
+        const rm = document.createElement('button');
+        rm.className = 'rm'; rm.textContent = '✕';
+        rm.onclick = () => {
+            selectedFiles.splice(i, 1);
+            setSelectedFiles(selectedFiles);
+        };
+        div.appendChild(img); div.appendChild(rm); div.appendChild(bdg);
+        grid.appendChild(div);
+    });
+
+    // Async face validation
+    const results = await validateFaces(files);
+    let badCount = 0, goodCount = 0;
+
+    files.forEach((_, i) => {
+        const el = document.getElementById(`rt-${i}`);
+        if (!el) return;
+        const bdg = el.querySelector('.badge');
+        if (!results) {
+            bdg.className = 'badge badge-ok'; bdg.textContent = '✓';
+            el.className = 'ref-thumb ok'; goodCount++;
+            return;
+        }
+        const r = results[i];
+        if (r.count <= 0) {
+            bdg.className = 'badge badge-bad'; bdg.textContent = '✗';
+            el.className = 'ref-thumb bad'; badCount++;
+        } else if (r.count > 1) {
+            bdg.className = 'badge badge-warn'; bdg.textContent = r.count+'?';
+            el.className = 'ref-thumb warn'; goodCount++;
+        } else {
+            bdg.className = 'badge badge-ok'; bdg.textContent = '✓';
+            el.className = 'ref-thumb ok'; goodCount++;
+        }
+    });
+
+    if (results && badCount > 0) {
+        faceStatus.classList.remove('hidden');
+        faceStatus.style.background = 'rgba(248,113,113,0.07)';
+        faceStatus.style.border     = '1px solid rgba(248,113,113,0.25)';
+        faceStatus.style.color      = 'var(--red)';
+        faceStatus.innerHTML = `⚠ ${badCount} photo(s) have no face detected. They'll be skipped during upload.`;
+    } else if (results && goodCount > 0) {
+        faceStatus.classList.remove('hidden');
+        faceStatus.style.background = 'rgba(74,222,128,0.07)';
+        faceStatus.style.border     = '1px solid rgba(74,222,128,0.25)';
+        faceStatus.style.color      = 'var(--green)';
+        faceStatus.innerHTML = `✓ ${goodCount} face(s) validated client-side`;
+    }
+
+    // Quality meter
+    const pct = Math.min(100, [0, 30, 55, 75, 90, 100][Math.min(goodCount, 5)]);
+    const color = pct >= 75 ? 'var(--green)' : pct >= 45 ? 'var(--amber)' : 'var(--red)';
+    const lbl   = pct >= 75 ? 'Excellent' : pct >= 45 ? 'Fair — add more angles' : 'Poor — add clearer photos';
+    qBar.style.width      = pct + '%';
+    qBar.style.background = color;
+    qLabel.style.color    = color;
+    qLabel.textContent    = lbl;
+}
+
+function setSelectedFiles(files) {
+    selectedFiles = files;
+    const label   = document.getElementById('file-label');
+    const btnUp   = document.getElementById('btn-upload');
+    if (files.length === 0) {
+        label.textContent = 'Click or drag selfies here';
+        btnUp.disabled = true;
+        document.getElementById('preview-grid').classList.add('hidden');
+        document.getElementById('quality-wrap').classList.add('hidden');
+        document.getElementById('face-status').classList.add('hidden');
+    } else {
+        label.textContent = `${files.length} photo${files.length>1?'s':''} selected`;
+        btnUp.disabled = false;
+        renderPreviews(files);
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  SCAN MODE TOGGLE
+// ══════════════════════════════════════════════════════════
+function setMode(m) {
+    scanMode = m;
+    const pill = document.getElementById('model-pill');
+    document.getElementById('mode-speed').className = 'mode-btn' + (m === 'speed'    ? ' active-speed' : '');
+    document.getElementById('mode-acc').className   = 'mode-btn' + (m === 'accurate' ? ' active-acc'   : '');
+    if (m === 'speed') {
+        pill.textContent = 'HOG · Fast';
+        pill.className   = 'pill pill-amber';
+    } else {
+        pill.textContent = 'CNN · Accurate';
+        pill.className   = 'pill pill-green';
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  TOLERANCE SLIDER
+// ══════════════════════════════════════════════════════════
+function syncTolSlider(val) {
+    val = parseFloat(val);
+    const pct  = ((val - 0.35) / 0.30) * 100;
+    document.getElementById('tol-thumb').style.left = pct + '%';
+    let label, hint;
+    if      (val <= 0.42) { label = 'Strict';   hint = 'Minimal false positives — may miss angled or partially obscured faces.'; }
+    else if (val <= 0.57) { label = 'Balanced';  hint = 'Best for most event photos. Recommended starting point.'; }
+    else                   { label = 'Loose';     hint = 'Catches more matches in crowds & dim light. Expects more false positives.'; }
+    document.getElementById('tol-val').textContent  = `${val.toFixed(2)} — ${label}`;
+    document.getElementById('tol-hint').textContent = hint;
+}
+
+// ══════════════════════════════════════════════════════════
+//  REFERENCES
+// ══════════════════════════════════════════════════════════
+async function loadReferences() {
+    const list  = document.getElementById('reference-list');
+    const badge = document.getElementById('dna-badge');
+    try {
+        const r = await fetch('/my-encodings');
+        const d = await r.json();
+        if (d.references && d.references.length > 0) {
+            badge.textContent = `${d.references.length} saved`;
+            badge.classList.remove('hidden');
+            list.innerHTML = d.references.map(ref => `
+                <div class="ref-chip">
+                    <span style="font-size:0.8rem;">🧬</span>
+                    <span class="mono" style="font-size:0.65rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ref.filename}">${ref.filename}</span>
+                    <button onclick="deleteRef(event,'${ref.ref_id}')"
+                        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;transition:color 0.15s;"
+                        onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+                </div>`).join('');
+        } else {
+            badge.classList.add('hidden');
+            list.innerHTML = `<p style="font-size:0.72rem;color:var(--muted);font-style:italic;">None saved.</p>`;
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function deleteRef(e, id) {
+    e.stopPropagation();
+    if (!confirm('Remove this Face DNA?')) return;
+    try {
+        const r = await fetch(`/delete-reference/${id}`, { method: 'DELETE' });
+        if (r.ok) { toast('Reference removed'); loadReferences(); }
+        else { const err = await r.json(); toast('Error: '+(err.detail||'delete failed'), 'error'); }
+    } catch { toast('Network error', 'error'); }
+}
+
+function toggleProfile(e) {
+    e && e.stopPropagation();
+    const m = document.getElementById('profile-manager');
+    m.classList.toggle('hidden');
+    if (!m.classList.contains('hidden')) loadReferences();
+}
+
+window.addEventListener('click', e => {
+    const m = document.getElementById('profile-manager');
+    const b = document.getElementById('user-profile');
+    if (m && b && !b.contains(e.target) && !m.contains(e.target)) m.classList.add('hidden');
+});
+
+// ══════════════════════════════════════════════════════════
+//  MAIN INIT
+// ══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+    // ── Slider
+    const slider = document.getElementById('tol-slider');
+    slider.addEventListener('input', e => syncTolSlider(e.target.value));
+    syncTolSlider(slider.value);
+
+    // ── Auth
+    try {
+        const res = await fetch('/auth/me');
+        const d   = await res.json();
+        if (d.authenticated) {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            const up = document.getElementById('user-profile');
+            up.classList.remove('hidden');
+            up.style.display = 'flex';
+            document.getElementById('user-name').textContent    = d.user.name;
+            document.getElementById('user-avatar').src          = d.user.picture;
+            document.getElementById('user-avatar-2').src        = d.user.picture;
+            document.getElementById('user-name-2').textContent  = d.user.name;
+            document.getElementById('user-email').textContent   = d.user.email || '';
+            toast(`Welcome back, ${d.user.name.split(' ')[0]}!`);
+            loadReferences();
+        }
+    } catch(e) { console.error('Auth error', e); }
+
+    // ── Drop zone
+    const dz = document.getElementById('dropzone');
+    const fi = document.getElementById('ref-input');
+    dz.addEventListener('click',     () => fi.click());
+    dz.addEventListener('dragover',  e  => { e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+    dz.addEventListener('drop', e => {
+        e.preventDefault(); dz.classList.remove('over');
+        if (e.dataTransfer.files.length) setSelectedFiles(Array.from(e.dataTransfer.files));
+    });
+    fi.addEventListener('change', () => {
+        if (fi.files.length) setSelectedFiles(Array.from(fi.files));
+    });
+
+    // ── Upload
+    document.getElementById('btn-upload').addEventListener('click', async () => {
+        if (!selectedFiles.length) return;
+        const btn = document.getElementById('btn-upload');
+        btn.textContent = `Encoding ${selectedFiles.length} photo(s)…`;
+        btn.disabled    = true;
+        let ok = 0, fail = 0;
+        toast(`Uploading ${selectedFiles.length} reference(s)…`, 'info');
+
+        for (const file of selectedFiles) {
+            const fd = new FormData();
+            fd.append('file', file);
+            // Tell backend to use num_jitters=10 for max accuracy on reference
+            fd.append('num_jitters', '10');
+            fd.append('model', 'large');  // use large model for references
+            try {
+                const r = await fetch('/upload-reference', { method: 'POST', body: fd });
+                if (r.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+
+        if (ok)   { toast(`✓ ${ok} Face DNA(s) saved`); loadReferences(); }
+        if (fail) toast(`✗ ${fail} upload(s) failed`, 'error');
+
+        setSelectedFiles([]);
+        fi.value = '';
+        btn.textContent = 'Extract & Save Face DNA';
+    });
+
+    // ── Local folder toggle
+    const lfi   = document.getElementById('local-folder-input');
+    const lLbl  = document.getElementById('local-folder-label');
+    const drInp = document.getElementById('drive-url');
+
+    lfi.addEventListener('change', () => {
+        if (lfi.files.length) {
+            lLbl.textContent   = `${lfi.files.length} photo(s) queued`;
+            lLbl.style.color   = 'var(--green)';
+            lLbl.style.fontWeight = '700';
+            drInp.value        = '';
+        } else {
+            lLbl.textContent      = 'Select event photos…';
+            lLbl.style.color      = 'var(--muted)';
+            lLbl.style.fontWeight = '400';
+        }
+    });
+    drInp.addEventListener('input', () => {
+        if (drInp.value.trim()) {
+            lfi.value = '';
+            lLbl.textContent      = 'Select event photos…';
+            lLbl.style.color      = 'var(--muted)';
+            lLbl.style.fontWeight = '400';
+        }
+    });
+
+    // ── Deep Scan
+    document.getElementById('btn-search').addEventListener('click', async () => {
+        const driveUrl   = drInp.value.trim();
+        const localFiles = lfi.files;
+        if (!driveUrl && localFiles.length === 0)
+            return toast('⚠ Provide a Drive link OR upload local photos', 'error');
+
+        const btnScan   = document.getElementById('btn-search');
+        const progArea  = document.getElementById('progress-area');
+        const scanStats = document.getElementById('scan-stats');
+        const mwrap     = document.getElementById('match-preview-wrap');
+        const mstrip    = document.getElementById('match-strip');
+        const scanLine  = document.getElementById('scan-line');
+
+        progArea.classList.remove('hidden');
+        scanStats.classList.remove('hidden');
+        mwrap.classList.add('hidden');
+        mstrip.innerHTML = '';
+        btnScan.disabled    = true;
+        btnScan.textContent = 'Scanning…';
+        scanLine.classList.add('active');
+        scanStartTime = Date.now();
+
+        // --- NEW: LOCK INPUTS ---
+        drInp.disabled = true;
+        drInp.style.opacity = '0.5';
+        document.getElementById('local-trigger').style.pointerEvents = 'none';
+        document.getElementById('local-trigger').style.opacity = '0.5';
+        slider.disabled = true;
+        slider.style.opacity = '0.5';
+        // ------------------------
+        // Reset stats
+        ['st-scanned','st-matched','st-rate','live-ct','prog-count'].forEach(id => {
+            document.getElementById(id).textContent = id === 'st-rate' ? '0%' : (id === 'prog-count' ? '0/0' : '0');
+        });
+        document.getElementById('progress-bar').style.width = '0%';
+        document.getElementById('eta-text').textContent     = 'ETA: —';
+        document.getElementById('status-text').textContent  = '';
+
+        const fd = new FormData();
+        fd.append('tolerance', slider.value);
+        fd.append('model', scanMode === 'accurate' ? 'cnn' : 'hog');
+        fd.append('upsample', scanMode === 'accurate' ? '1' : '0');
+
+        let endpoint = '/search';
+        if (localFiles.length > 0) {
+            endpoint = '/search-local';
+            for (let i = 0; i < localFiles.length; i++) fd.append('files', localFiles[i]);
+        } else {
+            fd.append('drive_link', driveUrl);
+        }
+
+        let totalPhotos = 0;
+        let liveMatches = 0;
+
+        try {
+            const response = await fetch(endpoint, { method: 'POST', body: fd });
+            if (!response.ok) {
+                const errText = await response.text();
+                toast('Server error: ' + errText.slice(0, 80), 'error');
+                return;
+            }
+            const reader  = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop(); // keep incomplete chunk
+
+                for (const part of parts) {
+                    if (!part.startsWith('data: ')) continue;
+                    let data;
+                    try { data = JSON.parse(part.slice(6)); } catch { continue; }
+
+                    if (data.type === 'progress') {
+                        totalPhotos = data.total;
+                        const pct   = totalPhotos > 0 ? (data.current / totalPhotos) * 100 : 0;
+
+                        document.getElementById('progress-bar').style.width   = pct + '%';
+                        document.getElementById('prog-count').textContent     = `${data.current}/${totalPhotos}`;
+                        document.getElementById('status-text').textContent    = data.filename || '';
+                        document.getElementById('st-scanned').textContent     = data.current;
+
+                        if (data.matched !== undefined) {
+                            liveMatches = data.matched;
+                            document.getElementById('live-ct').textContent     = liveMatches;
+                            document.getElementById('st-matched').textContent  = liveMatches;
+                            const rate = data.current > 0 ? Math.round((liveMatches/data.current)*100) : 0;
+                            document.getElementById('st-rate').textContent     = rate + '%';
+                        }
+
+                        // Live match preview thumbnails
+                        if (data.match_thumb && data.is_match) {
+                            mwrap.classList.remove('hidden');
+                            const img = document.createElement('img');
+                            img.className = 'match-thumb';
+                            img.src       = 'data:image/jpeg;base64,' + data.match_thumb;
+                            img.title     = data.filename;
+                            mstrip.appendChild(img);
+                            // Keep strip to last 20 thumbs
+                            while (mstrip.children.length > 20) mstrip.removeChild(mstrip.firstChild);
+                            mstrip.scrollLeft = mstrip.scrollWidth;
+                        }
+
+                        if (data.current > 5) {
+                            const elapsed = (Date.now() - scanStartTime) / 1000;
+                            const tpp     = elapsed / data.current;
+                            const left    = Math.round((totalPhotos - data.current) * tpp);
+                            const m = Math.floor(left/60), s = left%60;
+                            document.getElementById('eta-text').textContent = `ETA: ${m}m ${s<10?'0':''}${s}s`;
+                        }
+
+                    } else if (data.type === 'done') {
+                        document.getElementById('progress-bar').style.width   = '100%';
+                        document.getElementById('prog-count').textContent     = `${totalPhotos}/${totalPhotos}`;
+                        document.getElementById('st-matched').textContent     = data.matched;
+                        document.getElementById('st-scanned').textContent     = totalPhotos;
+                        const rate = totalPhotos > 0 ? Math.round((data.matched/totalPhotos)*100) : 0;
+                        document.getElementById('st-rate').textContent        = rate + '%';
+                        document.getElementById('eta-text').textContent       = 'Done ✓';
+                        scanLine.classList.remove('active');
+                        toast(`🎉 Done! ${data.matched} photo${data.matched!==1?'s':''} with you`);
+                        setTimeout(() => window.location.href = `/download/${data.search_id}`, 1800);
+
+                    } else if (data.type === 'error') {
+                        toast('AI error: ' + (data.message || 'unknown'), 'error');
+                        scanLine.classList.remove('active');
+                    }
+                }
+            }
+        } catch(e) {
+            toast('Connection failed. Is the backend running?', 'error');
+            scanLine.classList.remove('active');
+        } finally {
+            btnScan.disabled    = false;
+            btnScan.textContent = 'Start Deep Search';
+            
+            // --- NEW: UNLOCK INPUTS ---
+            drInp.disabled = false;
+            drInp.style.opacity = '1';
+            document.getElementById('local-trigger').style.pointerEvents = 'auto';
+            document.getElementById('local-trigger').style.opacity = '1';
+            slider.disabled = false;
+            slider.style.opacity = '1';
+            // --------------------------
+        }
+    });
+});
+</script>
+
+<!-- ════════════════════════════════════════════════════════
+     BACKEND UPGRADE NOTES (read this!)
+     ════════════════════════════════════════════════════════
+     The frontend now passes these params to your backend:
+
+     /upload-reference:
+       num_jitters=10   → face_recognition.face_encodings(img, num_jitters=10)
+       model=large      → face_recognition.face_encodings(img, model='large')
+                          (large model = 68-point landmark, much more accurate)
+
+     /search or /search-local:
+       model=cnn|hog    → face_recognition.face_locations(img, model=model)
+       upsample=0|1     → face_recognition.face_locations(img, number_of_times_to_upsample=upsample)
+       tolerance=float  → face_recognition.compare_faces(known, unknown, tolerance=tolerance)
+
+     CRITICAL backend fix — average your reference encodings:
+     
+       import numpy as np
+       from concurrent.futures import ThreadPoolExecutor
+       
+       # On /upload-reference: store all encodings, not just one
+       all_encodings = []
+       for ref in user_references:
+           all_encodings.extend(ref.encodings)  # each ref can have multiple
+       avg_encoding = np.mean(all_encodings, axis=0)  # single averaged embedding
+       
+       # Use compare_faces with averaged embedding + distance check:
+       matches = face_recognition.compare_faces([avg_encoding], face_enc, tolerance=tolerance)
+       dist    = face_recognition.face_distance([avg_encoding], face_enc)[0]
+       # Only accept if BOTH match is True AND dist < tolerance:
+       if matches[0] and dist < tolerance: ...
+       
+       # Parallel scan with ThreadPoolExecutor:
+       with ThreadPoolExecutor(max_workers=8) as pool:
+           results = list(pool.map(scan_single_photo, photo_list))
+       
+       # Pre-resize before encoding (big speed win):
+       from PIL import Image
+       img = Image.open(path)
+       img.thumbnail((1200, 1200))  # don't encode 12MP photos
+       img_array = np.array(img.convert('RGB'))
+-->
+</body>
+</html>
