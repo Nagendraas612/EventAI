@@ -20,6 +20,8 @@ import numpy as np
 import requests
 import face_recognition
 from PIL import Image
+from PIL import Image
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -136,22 +138,48 @@ def prepare_encodings(known_encodings: list) -> list[np.ndarray]:
 # ── Core Image Processor ───────────────────────────────────────────────────────
 def _process_image_bytes(filename: str, img_bytes: bytes, known_encodings: list[np.ndarray], tolerance: float, model_type: str, upsample: int) -> tuple[str, bytes | None]:
     try:
+        # 1. Load image and immediately resize to save RAM
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        max_size = 1200
+        
+        # Reduced from 1200 to 1000 for Render's 512MB limit
+        max_size = 1000 
         if max(img.size) > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
+        # 2. Convert to numpy for face_recognition
         img_arr = np.array(img)
+        
+        # 3. Detect faces (Ensure model_type is "hog" on Render!)
         locations = face_recognition.face_locations(img_arr, number_of_times_to_upsample=upsample, model=model_type)
-        if not locations: return filename, None
+        
+        if not locations:
+            # Memory cleanup
+            del img_arr
+            return filename, None
 
+        # 4. Encode and Compare
         candidate_encodings = face_recognition.face_encodings(img_arr, known_face_locations=locations, model="large")
+        
+        found_match = False
         for candidate in candidate_encodings:
             matches = face_recognition.compare_faces(known_encodings, candidate, tolerance=tolerance)
             if any(matches):
-                buf = io.BytesIO()
-                Image.fromarray(img_arr).save(buf, format="JPEG", quality=92)
-                return filename, buf.getvalue()
+                found_match = True
+                break
+        
+        # 5. Handle result and clear memory
+        result_bytes = None
+        if found_match:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85) # Lowered quality slightly to save bandwidth
+            result_bytes = buf.getvalue()
+
+        # CRITICAL: Manually clear the large array from RAM
+        del img_arr
+        img.close()
+        
+        return filename, result_bytes
+
     except Exception as exc:
         logger.warning("Error processing %s: %s", filename, exc)
     return filename, None
