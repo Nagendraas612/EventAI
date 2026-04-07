@@ -138,8 +138,8 @@ async def health():
 async def upload_reference(
     request: Request,
     file: UploadFile = File(...),
-    num_jitters: int = Form(10),  # Matches frontend [cite: 230]
-    model: str = Form("large")    # Matches frontend [cite: 230]
+    num_jitters: int = Form(1),   # Default to 1 (fast) instead of 10 (slow)
+    model: str = Form("large")    # User can choose "small" for faster/less accurate
 ):
     user = auth.require_user(request)
     user_id = user["sub"]
@@ -148,20 +148,14 @@ async def upload_reference(
     image_bytes = await file.read()
     
     try:
-        # Use the engine to encode with the new parameters [cite: 277]
-        encodings = engine.encode_reference_image(image_bytes)
+        # Use the engine to encode with the parameters from frontend
+        encodings = engine.encode_reference_image(image_bytes, num_jitters=num_jitters, model=model)
         
         if not encodings:
             raise HTTPException(400, "No face detected in this photo.")
 
-        # Save to MongoDB [cite: 212]
-        db = database.get_db()
-        await db["face_encodings"].insert_one({
-            "user_id": user_id,
-            "filename": file.filename,
-            "encoding": encodings[0], 
-            "created_at": datetime.utcnow()
-        })
+        # Save to MongoDB using the proper database function
+        await database.save_face_encoding(user_id, file.filename, encodings[0])
         
         return {"status": "success"}
     except Exception as e:
