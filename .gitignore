@@ -14,3 +14,4 @@ __pycache__/
 
 # Mac OS junk files
 .DS_Store
+.vercel
