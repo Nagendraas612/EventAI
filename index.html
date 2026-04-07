@@ -114,11 +114,12 @@
         font-size: 1.5rem;
         letter-spacing: -0.03em;
         background: linear-gradient(135deg, #fff 30%, var(--accent));
+        background-clip: text;
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
     .pill {
         font-family: var(--mono);
-        font-size: 0.6rem; font-weight: 500;
+        font-size: 0.85rem; font-weight: 500;
         letter-spacing: 0.12em; text-transform: uppercase;
         padding: 0.2rem 0.65rem; border-radius: 99px;
         border: 1px solid;
@@ -129,8 +130,8 @@
     .pill-red   { color: var(--red);     border-color: rgba(248,113,113,0.3);  background: rgba(248,113,113,0.07); }
 
     .label {
-        font-family: var(--mono); font-size: 0.6rem;
-        letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+        font-family: var(--mono); font-size: 0.8rem;
+        letter-spacing: 0.12em; text-transform: uppercase; color: var(--text);
     }
 
     /* ═══════════════════════════════════════
@@ -185,7 +186,7 @@
     .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .ref-thumb .badge {
         position: absolute; bottom: 3px; right: 3px;
-        font-family: var(--mono); font-size: 9px; font-weight: 700;
+        font-family: var(--mono); font-size: 11px; font-weight: 700;
         padding: 1px 5px; border-radius: 4px; line-height: 1.4;
     }
     .badge-ok   { background: rgba(74,222,128,0.9);  color: #052e16; }
@@ -196,7 +197,7 @@
         position: absolute; top: 3px; left: 3px;
         width: 18px; height: 18px; border-radius: 50%;
         background: rgba(0,0,0,0.75); border: none; cursor: pointer;
-        color: #ccc; font-size: 10px; line-height: 1;
+        color: #fff; font-size: 11px; line-height: 1;
         display: flex; align-items: center; justify-content: center;
         opacity: 0; transition: opacity 0.15s;
     }
@@ -218,9 +219,9 @@
     .mode-btn {
         padding: 0.65rem; border-radius: 0.65rem; cursor: pointer;
         border: 1px solid var(--border); background: transparent;
-        font-family: var(--mono); font-size: 0.68rem; font-weight: 700;
+        font-family: var(--mono); font-size: 0.8rem; font-weight: 700;
         letter-spacing: 0.06em; text-transform: uppercase;
-        color: var(--muted); transition: all 0.2s; text-align: center;
+        color: var(--text); transition: all 0.2s; text-align: center;
     }
     .mode-btn.active-speed  { border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.07); color: var(--amber); }
     .mode-btn.active-acc    { border-color: rgba(74,222,128,0.5);  background: rgba(74,222,128,0.07);  color: var(--green); }
@@ -241,6 +242,7 @@
         pointer-events: none; transition: left 0.08s;
     }
     input[type=range].tol-range {
+        appearance: none;
         -webkit-appearance: none;
         position: absolute; inset: -5px 0; height: calc(100% + 10px);
         background: transparent; cursor: pointer; z-index: 2; opacity: 0;
@@ -252,7 +254,7 @@
     ═══════════════════════════════════════ */
     .btn {
         width: 100%; padding: 0.85rem; border-radius: 0.85rem; border: none;
-        font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+        font-family: var(--mono); font-size: 0.95rem; font-weight: 700;
         letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
         transition: all 0.2s; position: relative; overflow: hidden;
     }
@@ -443,11 +445,11 @@
         <div id="tip-banner" style="display:flex;align-items:flex-start;gap:0.75rem;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:0.9rem;padding:0.85rem 1.1rem;margin-bottom:1.5rem;">
             <span style="font-size:1rem;margin-top:1px;">💡</span>
             <div>
-                <p style="font-size:0.78rem;color:#fcd34d;font-weight:600;margin-bottom:0.2rem;">Maximize your match rate</p>
+                <p style="font-size:0.78rem;color:#fcd34d;font-weight:600;margin-bottom:0.2rem;">Quick search tips</p>
                 <p style="font-size:0.72rem;color:#a16207;line-height:1.6;">
-                    Upload <strong style="color:#fbbf24;">3–5 clear selfies</strong> from different angles (front, left, right). 
-                    Use <strong style="color:#fbbf24;">Accurate mode</strong> for best results. 
-                    Set tolerance <strong style="color:#fbbf24;">0.50–0.55</strong> for real event photos.
+                    Upload <strong style="color:#fbbf24;">3–5 clear selfies</strong> from different angles. 
+                    Searches <strong style="color:#fbbf24;">detect faces in groups</strong> automatically. 
+                    Use tolerance <strong style="color:#fbbf24;">0.50–0.55</strong> for best results.
                 </p>
             </div>
             <button onclick="this.closest('#tip-banner').remove()" style="background:none;border:none;color:#92400e;cursor:pointer;font-size:1rem;margin-left:auto;flex-shrink:0;">✕</button>
@@ -906,9 +908,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const file of selectedFiles) {
             const fd = new FormData();
             fd.append('file', file);
-            // Tell backend to use num_jitters=10 for max accuracy on reference
-            fd.append('num_jitters', '10');
-            fd.append('model', 'large');  // use large model for references
+            // Fast defaults: num_jitters=1 gives ~1-2 sec encoding vs 5-10 sec with 10
+            fd.append('num_jitters', '1');
+            fd.append('model', 'large');  // use large model for accurate faces
             try {
                 const r = await fetch('/upload-reference', { method: 'POST', body: fd });
                 if (r.ok) ok++; else fail++;
